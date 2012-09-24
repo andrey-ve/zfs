@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2011, Lawrence Livermore National Security, LLC.
+ * Copyright (c) 2012 Cyril Plisko. All rights reserved.
  */
 
 
@@ -281,6 +282,76 @@ zpl_llseek(struct file *filp, loff_t offset, int whence)
 #endif /* SEEK_HOLE && SEEK_DATA */
 
 	return (generic_file_llseek(filp, offset, whence));
+}
+
+static ssize_t
+zpl_aio_read(struct kiocb *iocb, const struct iovec *iov,
+    unsigned long nr_segs, loff_t pos)
+{
+	struct file *filp = iocb->ki_filp;
+        struct inode *ip = filp->f_mapping->host;
+	cred_t *cr = CRED();
+	uio_t uio;
+	uio_seg_t seg;
+	ssize_t xferred;
+	int error;
+
+	/* Are we running on behalf of kernel or user consumer ? */
+	seg = segment_eq(get_fs(), KERNEL_DS) ? UIO_SYSSPACE : UIO_USERSPACE;
+
+	uio.uio_iov = (struct iovec *)iov;
+	uio.uio_resid = iocb->ki_left;
+	uio.uio_iovcnt = nr_segs;
+	uio.uio_loffset = pos;
+	uio.uio_limit = MAXOFFSET_T;
+	uio.uio_segflg = seg;
+
+	crhold(cr);
+	error = -zfs_read(ip, &uio, filp->f_flags, cr);
+	crfree(cr);
+
+	xferred = iocb->ki_left - uio.uio_resid;
+	iocb->ki_pos += xferred;
+
+	if (error < 0)
+		return (error);
+
+	return (xferred);
+}
+
+static ssize_t
+zpl_aio_write(struct kiocb *iocb, const struct iovec *iov,
+    unsigned long nr_segs, loff_t pos)
+{
+	struct file *filp = iocb->ki_filp;
+        struct inode *ip = filp->f_mapping->host;
+	cred_t *cr = CRED();
+	uio_t uio;
+	uio_seg_t seg;
+	ssize_t xferred;
+	int error;
+
+	/* Are we running on behalf of kernel or user consumer ? */
+	seg = segment_eq(get_fs(), KERNEL_DS) ? UIO_SYSSPACE : UIO_USERSPACE;
+
+	uio.uio_iov = (struct iovec *)iov;
+	uio.uio_resid = iocb->ki_left;
+	uio.uio_iovcnt = nr_segs;
+	uio.uio_loffset = pos;
+	uio.uio_limit = MAXOFFSET_T;
+	uio.uio_segflg = seg;
+
+	crhold(cr);
+	error = -zfs_write(ip, &uio, filp->f_flags, cr);
+	crfree(cr);
+
+	xferred = iocb->ki_left - uio.uio_resid;
+	iocb->ki_pos += xferred;
+
+	if (error < 0)
+		return (error);
+
+	return (xferred);
 }
 
 /*
@@ -554,6 +625,8 @@ const struct file_operations zpl_file_operations = {
 	.llseek		= zpl_llseek,
 	.read		= zpl_read,
 	.write		= zpl_write,
+	.aio_read	= zpl_aio_read,
+	.aio_write	= zpl_aio_write,
 	.mmap		= zpl_mmap,
 	.fsync		= zpl_fsync,
 #ifdef HAVE_FILE_FALLOCATE
