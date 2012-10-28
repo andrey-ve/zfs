@@ -4788,7 +4788,7 @@ spa_vdev_detach(spa_t *spa, uint64_t guid, uint64_t pguid, int replace_done)
 	error = spa_vdev_exit(spa, vd, txg, 0);
 
 	spa_history_log_internal(spa, "detach", NULL,
-	    "vdev=%s", vdpath);
+	    "vdev=%s error=%d", vdpath, error);
 	spa_strfree(vdpath);
 
 	/*
