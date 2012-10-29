@@ -105,6 +105,11 @@ int zfs_dirty_data_max_max_percent = 25;
 unsigned long zfs_dirty_data_sync = 64 * 1024 * 1024;
 
 /*
+ * Allow limit max zfs internal space reservation
+ */
+unsigned long zfs_reserve_limit = 0;
+
+/*
  * Once there is this amount of dirty data, the dmu_tx_delay() will kick in
  * and delay each transaction.
  * This value should be >= zfs_vdev_async_write_active_max_dirty_percent.
@@ -602,7 +607,9 @@ dsl_pool_adjustedsize(dsl_pool_t *dp, boolean_t netfree)
 
 	/*
 	 * Reserve about 1.6% (1/64), or at least 32MB, for allocation
-	 * efficiency.
+	 * efficiency. However, if 'zfs_reserve_limit' is set it will cap
+	 * the reservation. On really large pools it is suboptimal to
+	 * reserve 1/64 of total pool capacity.
 	 * XXX The intent log is not accounted for, so it must fit
 	 * within this slop.
 	 *
@@ -612,6 +619,8 @@ dsl_pool_adjustedsize(dsl_pool_t *dp, boolean_t netfree)
 	 */
 	space = spa_get_dspace(dp->dp_spa);
 	resv = MAX(space >> 6, SPA_MINDEVSIZE >> 1);
+	if (zfs_reserve_limit)
+		resv = MIN(resv, zfs_reserve_limit);
 	if (netfree)
 		resv >>= 1;
 
@@ -1075,4 +1084,7 @@ MODULE_PARM_DESC(zfs_dirty_data_sync, "sync txg when this much dirty data");
 
 module_param(zfs_delay_scale, ulong, 0644);
 MODULE_PARM_DESC(zfs_delay_scale, "how quickly delay approaches infinity");
+
+module_param(zfs_reserve_limit, ulong, 0644);
+MODULE_PARM_DESC(zfs_reserve_limit, "Max pool space internal reservation");
 #endif
