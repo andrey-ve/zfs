@@ -53,6 +53,7 @@ unsigned long zfs_write_limit_min = 32 << 20;	/* min write limit is 32MB */
 unsigned long zfs_write_limit_max = 0;		/* max data payload per txg */
 unsigned long zfs_write_limit_inflated = 0;
 unsigned long zfs_write_limit_override = 0;
+unsigned long zfs_reserve_limit = 0;
 
 kmutex_t zfs_write_limit_lock;
 
@@ -563,7 +564,9 @@ dsl_pool_adjustedsize(dsl_pool_t *dp, boolean_t netfree)
 
 	/*
 	 * Reserve about 1.6% (1/64), or at least 32MB, for allocation
-	 * efficiency.
+	 * efficiency. However, if 'zfs_reserve_limit' is set it will cap
+	 * the reservation. On really large pools it is suboptimal to
+	 * reserve 1/64 of total pool capacity.
 	 * XXX The intent log is not accounted for, so it must fit
 	 * within this slop.
 	 *
@@ -573,6 +576,8 @@ dsl_pool_adjustedsize(dsl_pool_t *dp, boolean_t netfree)
 	 */
 	space = spa_get_dspace(dp->dp_spa);
 	resv = MAX(space >> 6, SPA_MINDEVSIZE >> 1);
+	if (zfs_reserve_limit)
+		resv = MIN(resv, zfs_reserve_limit);
 	if (netfree)
 		resv >>= 1;
 
@@ -1052,4 +1057,7 @@ MODULE_PARM_DESC(zfs_write_limit_inflated, "Inflated txg write limit");
 
 module_param(zfs_write_limit_override, ulong, 0444);
 MODULE_PARM_DESC(zfs_write_limit_override, "Override txg write limit");
+
+module_param(zfs_reserve_limit, ulong, 0644);
+MODULE_PARM_DESC(zfs_reserve_limit, "Max pool space internal reservation");
 #endif
