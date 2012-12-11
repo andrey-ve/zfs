@@ -34,8 +34,11 @@
 #include <sys/zio.h>
 #include <sys/sunldi.h>
 
+#include <linux/blkdev_compat.h>
+
 char *zfs_vdev_scheduler = VDEV_SCHEDULER;
 static void *zfs_vdev_holder = VDEV_HOLDER;
+unsigned int zfs_vdev_timeout = 0;
 
 /*
  * Virtual device vector for disks.
@@ -104,6 +107,20 @@ vdev_disk_error(zio_t *zio)
 	    (u_longlong_t)zio->io_offset, (u_longlong_t)zio->io_size,
 	    zio->io_flags, (u_longlong_t)zio->io_delay);
 #endif
+}
+
+/*
+ * Set default IO timeout
+ */
+static void
+vdev_set_timeout(vdev_t *v, unsigned int timeout)
+{
+	vdev_disk_t *vd = v->vdev_tsd;
+	struct block_device *bdev = vd->vd_bdev;
+	struct request_queue *q = bdev_get_queue(bdev);
+
+	if (timeout)
+	    blk_queue_rq_timeout(q, timeout);
 }
 
 /*
@@ -312,6 +329,8 @@ skip_open:
 	/* Try to set the io scheduler elevator algorithm */
 	(void) vdev_elevator_switch(v, zfs_vdev_scheduler);
 
+	/* Set default IO timeout on this vdev */
+	(void) vdev_set_timeout(v, zfs_vdev_timeout);
 	return 0;
 }
 
@@ -838,3 +857,6 @@ vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
 
 module_param(zfs_vdev_scheduler, charp, 0644);
 MODULE_PARM_DESC(zfs_vdev_scheduler, "I/O scheduler");
+
+module_param(zfs_vdev_timeout, uint, 0644);
+MODULE_PARM_DESC(zfs_vdev_timeout, "vdev I/O timeout");
