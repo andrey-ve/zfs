@@ -149,6 +149,19 @@ __blk_queue_flush(struct request_queue *q, unsigned int flags)
 }
 #endif /* HAVE_BLK_QUEUE_FLUSH && HAVE_BLK_QUEUE_FLUSH_GPL_ONLY */
 
+/*
+ * 2.6.xx API change
+ * blk_queue_rq_timeout()
+ */
+#if defined(HAVE_BLK_QUEUE_RQ_TIMEOUT) && defined(HAVE_BLK_QUEUE_RQ_TIMEOUT_GPL_ONLY)
+#define blk_queue_rq_timeout __blk_queue_rq_timeout
+static inline void
+__blk_queue_rq_timeout(struct request_queue *q, unsigned int timeout)
+{
+	q->rq_timeout = timeout;
+}
+#endif /* HAVE_BLK_QUEUE_RQ_TIMEOUT && HAVE_BLK_QUEUE_RQ_TIMEOUT_GPL_ONLY */
+
 #ifndef HAVE_BLK_RQ_POS
 static inline sector_t
 blk_rq_pos(struct request *req)
