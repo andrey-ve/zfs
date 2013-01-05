@@ -44,8 +44,8 @@
 #include <libzfs.h>
 #include "libzfs_impl.h"
 
-#define	ZDIFF_SNAPDIR		"/.zfs/snapshot/"
-#define	ZDIFF_SHARESDIR 	"/.zfs/shares/"
+#define	ZDIFF_SNAPDIR		"/.infi/snapshot/"
+#define	ZDIFF_SHARESDIR 	"/.infi/shares/"
 #define	ZDIFF_PREFIX		"zfs-diff-%d"
 
 #define	ZDIFF_ADDED	'+'
