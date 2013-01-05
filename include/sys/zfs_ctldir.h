@@ -35,7 +35,7 @@
 #include <sys/zfs_vfsops.h>
 #include <sys/zfs_znode.h>
 
-#define	ZFS_CTLDIR_NAME		".zfs"
+#define	ZFS_CTLDIR_NAME		".infi"
 #define	ZFS_SNAPDIR_NAME	"snapshot"
 #define	ZFS_SHAREDIR_NAME	"shares"
 
