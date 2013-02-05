@@ -132,6 +132,9 @@ uint_t		zio_taskq_basedc = 80;		/* base duty cycle */
 
 boolean_t	spa_create_process = B_TRUE;	/* no process ==> no sysdc */
 
+/* Enable/Disable removing configuration/cache on export */
+int		spa_export_removes_cfg = 1;
+
 /*
  * This (illegal) pool name is used when temporarily importing a spa_t in order
  * to get the vdev stats associated with the imported devices.
@@ -4101,8 +4104,12 @@ spa_export_common(char *pool, int new_state, nvlist_t **oldconfig,
 		VERIFY(nvlist_dup(spa->spa_config, oldconfig, 0) == 0);
 
 	if (new_state != POOL_STATE_UNINITIALIZED) {
-		if (!hardforce)
-			spa_config_sync(spa, B_TRUE, B_TRUE);
+		if (!hardforce) {
+			int removing;
+			
+			removing = (spa_export_removes_cfg) ? B_TRUE : B_FALSE;
+			spa_config_sync(spa, removing, B_TRUE);
+		}
 		spa_remove(spa);
 	}
 	mutex_exit(&spa_namespace_lock);
@@ -6417,4 +6424,8 @@ EXPORT_SYMBOL(spa_prop_clear_bootfs);
 
 /* asynchronous event notification */
 EXPORT_SYMBOL(spa_event_notify);
+
+module_param(spa_export_removes_cfg, int, 0644);
+MODULE_PARM_DESC(spa_export_removes_cfg,
+	"Unset to disallow zpool export remove config from cache");
 #endif
