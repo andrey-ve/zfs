@@ -2232,6 +2232,31 @@ zfs_prop_set_special(const char *dsname, zprop_source_t source,
 
 			spa_close(spa, FTAG);
 		}
+		if (intval == ZIO_COMPRESS_LZO) {
+			zfeature_info_t *feature =
+			    &spa_feature_table[SPA_FEATURE_LZO_COMPRESS];
+			spa_t *spa;
+			dsl_pool_t *dp;
+
+			if ((err = spa_open(dsname, &spa, FTAG)) != 0)
+				return (err);
+
+			dp = spa->spa_dsl_pool;
+
+			/*
+			 * Setting the LZO compression algorithm activates
+			 * the feature.
+			 */
+			if (!spa_feature_is_active(spa, feature)) {
+				if ((err = zfs_prop_activate_feature(dp,
+				    feature)) != 0) {
+					spa_close(spa, FTAG);
+					return (err);
+				}
+			}
+
+			spa_close(spa, FTAG);
+		}
 		/*
 		 * We still want the default set action to be performed in the
 		 * caller, we only performed zfeature settings here.
@@ -3463,6 +3488,22 @@ zfs_check_settable(const char *dsname, nvpair_t *pair, cred_t *cr)
 				zfeature_info_t *feature =
 				    &spa_feature_table[
 				    SPA_FEATURE_LZ4_COMPRESS];
+				spa_t *spa;
+
+				if ((err = spa_open(dsname, &spa, FTAG)) != 0)
+					return (err);
+
+				if (!spa_feature_is_enabled(spa, feature)) {
+					spa_close(spa, FTAG);
+					return (ENOTSUP);
+				}
+				spa_close(spa, FTAG);
+			}
+
+			if (intval == ZIO_COMPRESS_LZO) {
+				zfeature_info_t *feature =
+				    &spa_feature_table[
+				    SPA_FEATURE_LZO_COMPRESS];
 				spa_t *spa;
 
 				if ((err = spa_open(dsname, &spa, FTAG)) != 0)

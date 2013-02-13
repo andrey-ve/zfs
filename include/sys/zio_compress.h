@@ -60,6 +60,12 @@ extern void lz4_init(void);
 extern void lz4_fini(void);
 
 /*
+ * LZO compression init & free
+ */
+extern void lzo_init(void);
+extern void lzo_fini(void);
+
+/*
  * Compression routines.
  */
 extern size_t lzjb_compress(void *src, void *dst, size_t s_len, size_t d_len,
@@ -77,6 +83,10 @@ extern int zle_decompress(void *src, void *dst, size_t s_len, size_t d_len,
 extern size_t lz4_compress(void *src, void *dst, size_t s_len, size_t d_len,
     int level);
 extern int lz4_decompress(void *src, void *dst, size_t s_len, size_t d_len,
+    int level);
+extern size_t lzo_compress(void *src, void *dst, size_t s_len, size_t d_len,
+    int level);
+extern int lzo_decompress(void *src, void *dst, size_t s_len, size_t d_len,
     int level);
 
 /*

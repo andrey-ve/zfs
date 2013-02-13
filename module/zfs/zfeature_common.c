@@ -164,4 +164,7 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_LZ4_COMPRESS,
 	    "org.illumos:lz4_compress", "lz4_compress",
 	    "LZ4 compression algorithm support.", B_FALSE, B_FALSE, NULL);
+	zfeature_register(SPA_FEATURE_LZO_COMPRESS,
+	    "org.zfsonlinux:lzo_compress", "lzo_compress",
+	    "LZO compression algorithm support.", B_FALSE, B_FALSE, NULL);
 }
