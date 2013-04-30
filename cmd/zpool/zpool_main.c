@@ -5669,6 +5669,16 @@ find_command_idx(char *command, int *idx)
 	return (1);
 }
 
+static void
+izbox_bailout(void)
+{
+	if (getenv("IZBOX_IDDQD") == NULL) {
+		(void) fprintf(stderr, gettext("This command has been "
+		    "disabled. Use izpool command instead.\n"));
+		exit(2);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -5678,6 +5688,8 @@ main(int argc, char **argv)
 
 	(void) setlocale(LC_ALL, "");
 	(void) textdomain(TEXT_DOMAIN);
+
+	izbox_bailout();
 
 	opterr = 0;
 
