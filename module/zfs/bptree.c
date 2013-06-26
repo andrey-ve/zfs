@@ -37,6 +37,13 @@
 #include <sys/spa.h>
 
 /*
+ * When bptree_iterate() traverses the block trees it will choke on any error.
+ * If we want it to try harder we can set this variable to non-zero value and
+ * it will assert TRAVERSE_HARD flag for the traversal routine.
+ */
+int bptree_traverse_hard = 0;
+
+/*
  * A bptree is a queue of root block pointers from destroyed datasets. When a
  * dataset is destroyed its root block pointer is put on the end of the pool's
  * bptree queue so the dataset's blocks can be freed asynchronously by
@@ -180,6 +187,7 @@ bptree_iterate(objset_t *os, uint64_t obj, boolean_t free, bptree_itor_t func,
 	err = 0;
 	for (i = ba.ba_phys->bt_begin; i < ba.ba_phys->bt_end; i++) {
 		bptree_entry_phys_t bte;
+		int flags;
 
 		ASSERT(!free || i == ba.ba_phys->bt_begin);
 
@@ -188,9 +196,11 @@ bptree_iterate(objset_t *os, uint64_t obj, boolean_t free, bptree_itor_t func,
 		if (err != 0)
 			break;
 
+		flags = TRAVERSE_PREFETCH_METADATA | TRAVERSE_POST;
+		flags |= (bptree_traverse_hard) ? TRAVERSE_HARD : 0;
+
 		err = traverse_dataset_destroyed(os->os_spa, &bte.be_bp,
-		    bte.be_birth_txg, &bte.be_zb,
-		    TRAVERSE_PREFETCH_METADATA | TRAVERSE_POST,
+		    bte.be_birth_txg, &bte.be_zb, flags,
 		    bptree_visit_cb, &ba);
 		if (free) {
 			ASSERT(err == 0 || err == ERESTART);
@@ -223,3 +233,8 @@ bptree_iterate(objset_t *os, uint64_t obj, boolean_t free, bptree_itor_t func,
 
 	return (err);
 }
+
+#if defined(_KERNEL) && defined(HAVE_SPL)
+module_param(bptree_traverse_hard, int, 0644);
+MODULE_PARM_DESC(bptree_traverse_hard, "let bptree iterator ignore errors");
+#endif /* _KERNEL && HAVE_SPL */
