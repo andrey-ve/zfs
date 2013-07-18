@@ -700,6 +700,8 @@ int l2arc_noprefetch = B_TRUE;			/* don't cache prefetch bufs */
 int l2arc_nocompress = B_FALSE;			/* don't compress bufs */
 int l2arc_feed_again = B_TRUE;			/* turbo warmup */
 int l2arc_norw = B_FALSE;			/* no reads during writes */
+int l2arc_ignore_mru = B_FALSE;	/* Avoid caching MRU materials in L2ARC */
+int l2arc_ignore_mfu = B_FALSE;	/* Avoid caching MFU materials in L2ARC */
 
 /*
  * L2ARC Internals
@@ -4764,20 +4766,28 @@ l2arc_list_locked(int list_num, kmutex_t **lock)
 
 	switch (list_num) {
 	case 0:
-		list = &arc_mfu->arcs_list[ARC_BUFC_METADATA];
-		*lock = &arc_mfu->arcs_mtx;
+		if (l2arc_ignore_mfu == 0) {
+			list = &arc_mfu->arcs_list[ARC_BUFC_METADATA];
+			*lock = &arc_mfu->arcs_mtx;
+		}
 		break;
 	case 1:
-		list = &arc_mru->arcs_list[ARC_BUFC_METADATA];
-		*lock = &arc_mru->arcs_mtx;
+		if (l2arc_ignore_mru == 0) {
+			list = &arc_mru->arcs_list[ARC_BUFC_METADATA];
+			*lock = &arc_mru->arcs_mtx;
+		}
 		break;
 	case 2:
-		list = &arc_mfu->arcs_list[ARC_BUFC_DATA];
-		*lock = &arc_mfu->arcs_mtx;
+		if (l2arc_ignore_mfu == 0) {
+			list = &arc_mfu->arcs_list[ARC_BUFC_DATA];
+			*lock = &arc_mfu->arcs_mtx;
+		}
 		break;
 	case 3:
-		list = &arc_mru->arcs_list[ARC_BUFC_DATA];
-		*lock = &arc_mru->arcs_mtx;
+		if (l2arc_ignore_mru == 0) {
+			list = &arc_mru->arcs_list[ARC_BUFC_DATA];
+			*lock = &arc_mru->arcs_mtx;
+		}
 		break;
 	}
 
@@ -4972,6 +4982,8 @@ l2arc_write_buffers(spa_t *spa, l2arc_dev_t *dev, uint64_t target_sz,
 		uint64_t passed_sz = 0;
 
 		list = l2arc_list_locked(try, &list_lock);
+		if (list == NULL)
+			continue;
 
 		/*
 		 * L2ARC fast warmup.
@@ -5664,4 +5676,9 @@ MODULE_PARM_DESC(l2arc_feed_again, "Turbo L2ARC warmup");
 module_param(l2arc_norw, int, 0644);
 MODULE_PARM_DESC(l2arc_norw, "No reads during writes");
 
+module_param(l2arc_ignore_mru, int, 0644);
+MODULE_PARM_DESC(l2arc_ignore_mru, "Avoid caching MRU materials in L2ARC");
+
+module_param(l2arc_ignore_mfu, int, 0644);
+MODULE_PARM_DESC(l2arc_ignore_mfu, "Avoid caching MFU materials in L2ARC");
 #endif
