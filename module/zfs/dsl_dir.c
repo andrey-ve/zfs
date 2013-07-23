@@ -436,6 +436,10 @@ dsl_dir_stats(dsl_dir_t *dd, nvlist_t *nv)
 	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_QUOTA, dd->dd_phys->dd_quota);
 	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_RESERVATION,
 	    dd->dd_phys->dd_reserved);
+	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_COMPRESSED,
+	    dd->dd_phys->dd_compressed_bytes);
+	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_UNCOMPRESSED,
+	    dd->dd_phys->dd_uncompressed_bytes);
 	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_COMPRESSRATIO,
 	    dd->dd_phys->dd_compressed_bytes == 0 ? 100 :
 	    (dd->dd_phys->dd_uncompressed_bytes * 100 /
