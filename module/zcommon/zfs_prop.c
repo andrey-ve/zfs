@@ -340,6 +340,10 @@ zfs_prop_init(void)
 	    ZFS_TYPE_FILESYSTEM | ZFS_TYPE_VOLUME, "<size>", "AVAIL");
 	zprop_register_number(ZFS_PROP_REFERENCED, "referenced", 0,
 	    PROP_READONLY, ZFS_TYPE_DATASET, "<size>", "REFER");
+	zprop_register_number(ZFS_PROP_COMPRESSED, "compressed", 0,
+	    PROP_READONLY, ZFS_TYPE_DATASET, "<size>", "COMPRESSED");
+	zprop_register_number(ZFS_PROP_UNCOMPRESSED, "uncompressed", 0,
+	    PROP_READONLY, ZFS_TYPE_DATASET, "<size>", "UNCOMPRESSED");
 	zprop_register_number(ZFS_PROP_COMPRESSRATIO, "compressratio", 0,
 	    PROP_READONLY, ZFS_TYPE_DATASET,
 	    "<1.00x or higher if compressed>", "RATIO");

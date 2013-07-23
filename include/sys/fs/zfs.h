@@ -143,6 +143,8 @@ typedef enum {
 	ZFS_PROP_INCONSISTENT,		/* not exposed to the user */
 	ZFS_PROP_SNAPDEV,
 	ZFS_PROP_ACLTYPE,
+	ZFS_PROP_COMPRESSED,
+	ZFS_PROP_UNCOMPRESSED,
 	ZFS_NUM_PROPS
 } zfs_prop_t;
 
