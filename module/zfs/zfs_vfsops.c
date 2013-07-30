@@ -1248,6 +1248,8 @@ zfs_domount(struct super_block *sb, void *data, int silent)
 
 	if (!zsb->z_issnap)
 		zfsctl_create(zsb);
+	else
+		dget(sb->s_root);
 out:
 	if (error) {
 		dmu_objset_disown(zsb->z_os, zsb);
@@ -1270,8 +1272,14 @@ zfs_preumount(struct super_block *sb)
 {
 	zfs_sb_t *zsb = sb->s_fs_info;
 
-	if (zsb != NULL && zsb->z_ctldir != NULL)
+	if(!zsb)
+		return;
+
+	if (zsb->z_ctldir != NULL)
 		zfsctl_destroy(zsb);
+
+	if (zsb->z_issnap)
+		dput(sb->s_root);
 }
 EXPORT_SYMBOL(zfs_preumount);
 
