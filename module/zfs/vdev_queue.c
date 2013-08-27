@@ -496,6 +496,7 @@ vdev_queue_aggregate(vdev_queue_t *vq, zio_t *zio)
 	vdev_queue_class_t *vqc = &vq->vq_class[zio->io_priority];
 	avl_tree_t *t = &vqc->vqc_queued_tree;
 	enum zio_flag flags = zio->io_flags & ZIO_FLAG_AGG_INHERIT;
+	avl_tree_t io_to_issue;
 
 	if (zio->io_flags & ZIO_FLAG_DONT_AGGREGATE)
 		return (NULL);
@@ -624,6 +625,9 @@ vdev_queue_aggregate(vdev_queue_t *vq, zio_t *zio)
 	aio->io_timestamp = first->io_timestamp;
 
 	nio = first;
+
+	avl_create(&io_to_issue, vdev_queue_offset_compare,
+		sizeof (zio_t), offsetof(struct zio, io_queue_node));
 	do {
 		dio = nio;
 		nio = AVL_NEXT(t, dio);
@@ -641,11 +645,19 @@ vdev_queue_aggregate(vdev_queue_t *vq, zio_t *zio)
 
 		zio_add_child(dio, aio);
 		vdev_queue_io_remove(vq, dio);
-		zio_vdev_io_bypass(dio);
-		zio_execute(dio);
+		avl_add(&io_to_issue, dio);
 	} while (dio != last);
 
 	list_remove(&vq->vq_io_list, vi);
+
+	mutex_exit(&vq->vq_lock);
+	for (dio = avl_first(&io_to_issue); dio != NULL;
+			dio = AVL_NEXT(&io_to_issue, dio)) {
+		zio_vdev_io_bypass(dio);
+		zio_execute(dio);
+	}
+	avl_destroy(&io_to_issue);
+	mutex_enter(&vq->vq_lock);
 
 	return (aio);
 }
