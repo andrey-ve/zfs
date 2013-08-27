@@ -307,7 +307,8 @@ zpool_get_prop(zpool_handle_t *zhp, zpool_prop_t prop, char *buf, size_t len,
 		case ZPOOL_PROP_FREEING:
 		case ZPOOL_PROP_EXPANDSZ:
 		case ZPOOL_PROP_ASHIFT:
-			(void) zfs_nicenum(intval, buf, len);
+			(void) snprintf(buf, len, "%llu",
+			    (u_longlong_t)intval);
 			break;
 
 		case ZPOOL_PROP_CAPACITY:
