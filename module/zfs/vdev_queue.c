@@ -319,6 +319,8 @@ again:
 
 	if (fio != lio) {
 		uint64_t size = IO_SPAN(fio, lio);
+		avl_tree_t io_to_issue;
+
 		ASSERT(size <= maxspan);
 		ASSERT(vi != NULL);
 
@@ -329,6 +331,9 @@ again:
 		aio->io_timestamp = fio->io_timestamp;
 
 		nio = fio;
+
+		avl_create(&io_to_issue, vdev_queue_offset_compare,
+			sizeof (zio_t), offsetof(struct zio, io_offset_node));
 		do {
 			dio = nio;
 			nio = AVL_NEXT(t, dio);
@@ -347,12 +352,19 @@ again:
 
 			zio_add_child(dio, aio);
 			vdev_queue_io_remove(vq, dio);
-			zio_vdev_io_bypass(dio);
-			zio_execute(dio);
+			avl_add(&io_to_issue, dio);
 		} while (dio != lio);
 
 		avl_add(&vq->vq_pending_tree, aio);
 		list_remove(&vq->vq_io_list, vi);
+
+		mutex_exit(&vq->vq_lock);
+		for (dio = avl_first(&io_to_issue); dio != NULL;
+				dio = AVL_NEXT(&io_to_issue, dio)) {
+			zio_vdev_io_bypass(dio);
+			zio_execute(dio);
+		}
+		mutex_enter(&vq->vq_lock);
 
 		return (aio);
 	}
