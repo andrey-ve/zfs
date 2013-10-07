@@ -1173,7 +1173,7 @@ make_disks(zpool_handle_t *zhp, nvlist_t *nv)
 			    strrchr(devpath, '/') + 1) == -1)
 				return (-1);
 
-			ret = zpool_label_disk_wait(udevpath, 1000);
+			ret = zpool_label_disk_wait(udevpath, 5000);
 			if (ret) {
 				(void) fprintf(stderr, gettext("cannot "
 				    "resolve path '%s': %d\n"), udevpath, ret);
