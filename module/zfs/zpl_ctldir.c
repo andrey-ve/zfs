@@ -401,9 +401,11 @@ const struct file_operations zpl_fops_snapdir = {
 const struct inode_operations zpl_ops_snapdir = {
 	.lookup		= zpl_snapdir_lookup,
 	.getattr	= zpl_snapdir_getattr,
+#if defined(IZBOX_REENABLE_INBAND_SNAPSHOT_MANAGEMENT)
 	.rename		= zpl_snapdir_rename,
 	.rmdir		= zpl_snapdir_rmdir,
 	.mkdir		= zpl_snapdir_mkdir,
+#endif
 };
 
 static struct dentry *
