@@ -68,6 +68,7 @@ zpl_root_iterate(struct file *filp, struct dir_context *ctx)
 		ctx->pos++;
 	}
 
+#if defined(IZBOX_REENABLE_SHAREDIR)
 	if (ctx->pos == 3) {
 		if (!dir_emit(ctx, ZFS_SHAREDIR_NAME, strlen(ZFS_SHAREDIR_NAME),
 		    ZFSCTL_INO_SHARES, DT_DIR))
@@ -75,6 +76,8 @@ zpl_root_iterate(struct file *filp, struct dir_context *ctx)
 
 		ctx->pos++;
 	}
+#endif
+
 out:
 	ZFS_EXIT(zsb);
 
