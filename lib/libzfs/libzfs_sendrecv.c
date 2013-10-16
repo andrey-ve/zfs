@@ -2015,10 +2015,11 @@ again:
 			    stream_originguid, originguid)) {
 			case 1: {
 				/* promote it! */
-				zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+				zfs_cmd_t zc;
 				nvlist_t *origin_nvfs;
 				char *origin_fsname;
 
+				bzero(&zc, sizeof(zc));
 				if (flags->verbose)
 					(void) printf("promoting %s\n", fsname);
 
@@ -2087,8 +2088,9 @@ again:
 			if (0 == nvlist_lookup_nvlist(stream_nvfs, "snapprops",
 			    &props) && 0 == nvlist_lookup_nvlist(props,
 			    stream_snapname, &props)) {
-				zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+				zfs_cmd_t zc;
 
+				bzero(&zc, sizeof(zc));
 				zc.zc_cookie = B_TRUE; /* received */
 				(void) snprintf(zc.zc_name, sizeof (zc.zc_name),
 				    "%s@%s", fsname, nvpair_name(snapelem));
@@ -2518,7 +2520,7 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
     nvlist_t *stream_nv, avl_tree_t *stream_avl, char **top_zfs, int cleanup_fd,
     uint64_t *action_handlep)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	time_t begin_time;
 	int ioctl_err, ioctl_errno, err;
 	char *cp;
@@ -2534,8 +2536,8 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 	zprop_errflags_t prop_errflags;
 	boolean_t recursive;
 
+	bzero(&zc, sizeof(zc));
 	begin_time = time(NULL);
-
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "cannot receive"));
 
@@ -2568,8 +2570,10 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 			    snapname, &snapprops_nvlist));
 		}
 
-		if (ret != 0)
+		if (ret != 0) {
+			zcmd_free_nvlists(&zc);
 			return (-1);
+		}
 	}
 
 	cp = NULL;
@@ -2588,6 +2592,7 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 		 * the tail of the sent snapshot path.
 		 */
 		if (strchr(tosnap, '@')) {
+			zcmd_free_nvlists(&zc);
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN, "invalid "
 			    "argument - snapshot not allowed with -e"));
 			return (zfs_error(hdl, EZFS_INVALIDNAME, errbuf));
@@ -2615,6 +2620,7 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 		 * (all but the pool name).
 		 */
 		if (strchr(tosnap, '@')) {
+			zcmd_free_nvlists(&zc);
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN, "invalid "
 			    "argument - snapshot not allowed with -d"));
 			return (zfs_error(hdl, EZFS_INVALIDNAME, errbuf));
@@ -2632,6 +2638,7 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 	} else {
 		/* A snapshot was specified as an exact path (no -d or -e). */
 		if (recursive) {
+			zcmd_free_nvlists(&zc);
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 			    "cannot specify snapshot name for multi-snapshot "
 			    "stream"));
@@ -2892,8 +2899,9 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 	zcmd_free_nvlists(&zc);
 
 	if (err == 0 && snapprops_nvlist) {
-		zfs_cmd_t zc2 = { "\0", "\0", "\0", "\0", 0 };
+		zfs_cmd_t zc2;
 
+		bzero(&zc, sizeof(zc));
 		(void) strcpy(zc2.zc_name, zc.zc_value);
 		zc2.zc_cookie = B_TRUE; /* received */
 		if (zcmd_write_src_nvlist(hdl, &zc2, snapprops_nvlist) == 0) {

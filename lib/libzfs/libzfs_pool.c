@@ -692,7 +692,7 @@ error:
 int
 zpool_set_prop(zpool_handle_t *zhp, const char *propname, const char *propval)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	int ret = -1;
 	char errbuf[1024];
 	nvlist_t *nvl = NULL;
@@ -700,6 +700,7 @@ zpool_set_prop(zpool_handle_t *zhp, const char *propname, const char *propval)
 	uint64_t version;
 	prop_flags_t flags = { 0 };
 
+	bzero(&zc, sizeof(zc));
 	(void) snprintf(errbuf, sizeof (errbuf),
 	    dgettext(TEXT_DOMAIN, "cannot set property for '%s'"),
 	    zhp->zpool_name);
@@ -1141,13 +1142,14 @@ int
 zpool_create(libzfs_handle_t *hdl, const char *pool, nvlist_t *nvroot,
     nvlist_t *props, nvlist_t *fsprops)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	nvlist_t *zc_fsprops = NULL;
 	nvlist_t *zc_props = NULL;
 	char msg[1024];
 	char *altroot;
 	int ret = -1;
 
+	bzero(&zc, sizeof(zc));
 	(void) snprintf(msg, sizeof (msg), dgettext(TEXT_DOMAIN,
 	    "cannot create '%s'"), pool);
 
@@ -1718,7 +1720,7 @@ int
 zpool_import_props(libzfs_handle_t *hdl, nvlist_t *config, const char *newname,
     nvlist_t *props, int flags)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	zpool_rewind_policy_t policy;
 	nvlist_t *nv = NULL;
 	nvlist_t *nvinfo = NULL;
@@ -1734,6 +1736,7 @@ zpool_import_props(libzfs_handle_t *hdl, nvlist_t *config, const char *newname,
 
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "cannot import pool '%s'"), origname);
+	bzero(&zc, sizeof(zc));
 
 	if (newname != NULL) {
 		if (!zpool_name_valid(hdl, B_FALSE, newname))
@@ -1788,6 +1791,7 @@ zpool_import_props(libzfs_handle_t *hdl, nvlist_t *config, const char *newname,
 
 	(void) zcmd_read_dst_nvlist(hdl, &zc, &nv);
 	zpool_get_rewind_policy(config, &policy);
+	zcmd_free_nvlists(&zc);
 
 	if (error) {
 		char desc[1024];
@@ -1898,7 +1902,6 @@ zpool_import_props(libzfs_handle_t *hdl, nvlist_t *config, const char *newname,
 		return (0);
 	}
 
-	zcmd_free_nvlists(&zc);
 	nvlist_free(props);
 
 	return (ret);
@@ -2883,7 +2886,7 @@ int
 zpool_vdev_split(zpool_handle_t *zhp, char *newname, nvlist_t **newroot,
     nvlist_t *props, splitflags_t flags)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	char msg[1024];
 	nvlist_t *tree, *config, **child, **newchild, *newconfig = NULL;
 	nvlist_t **varray = NULL, *zc_props = NULL;
@@ -2893,6 +2896,7 @@ zpool_vdev_split(zpool_handle_t *zhp, char *newname, nvlist_t **newroot,
 	boolean_t freelist = B_FALSE, memory_err = B_TRUE;
 	int retval = 0;
 
+	bzero(&zc, sizeof(zc));
 	(void) snprintf(msg, sizeof (msg),
 	    dgettext(TEXT_DOMAIN, "Unable to split %s"), zhp->zpool_name);
 
@@ -3139,7 +3143,7 @@ zpool_vdev_remove(zpool_handle_t *zhp, const char *path)
 int
 zpool_clear(zpool_handle_t *zhp, const char *path, nvlist_t *rewindnvl)
 {
-	zfs_cmd_t zc = { "\0", "\0", "\0", "\0", 0 };
+	zfs_cmd_t zc;
 	char msg[1024];
 	nvlist_t *tgt;
 	zpool_rewind_policy_t policy;
@@ -3148,6 +3152,7 @@ zpool_clear(zpool_handle_t *zhp, const char *path, nvlist_t *rewindnvl)
 	nvlist_t *nvi = NULL;
 	int error;
 
+	bzero(&zc, sizeof(zc));
 	if (path)
 		(void) snprintf(msg, sizeof (msg),
 		    dgettext(TEXT_DOMAIN, "cannot clear errors for %s"),
