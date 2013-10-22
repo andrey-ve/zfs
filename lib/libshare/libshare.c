@@ -106,6 +106,7 @@ libshare_init(void)
 	libshare_nfs_init();
 	libshare_smb_init();
 
+#if defined(IZBOX_WANTS_THIS_FUNCTIONALITY_BACK)
 	/*
 	 * This bit causes /etc/dfs/sharetab to be updated before libzfs gets a
 	 * chance to read that file; this is necessary because the sharetab file
@@ -113,6 +114,7 @@ libshare_init(void)
 	 * or users manually removing shares)
 	 */
 	sa_fini(sa_init(0));
+#endif
 }
 
 static void
