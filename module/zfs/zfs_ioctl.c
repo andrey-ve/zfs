@@ -3500,11 +3500,12 @@ recursive_unmount(const char *fsname, void *arg)
 {
 	const char *snapname = arg;
 	char *fullname;
+	int error;
 
 	fullname = kmem_asprintf("%s@%s", fsname, snapname);
-	zfs_unmount_snap(fullname);
+	error = zfs_unmount_snap(fullname);
 	strfree(fullname);
-	return (zfs_unmount_snap(fullname));
+	return (error);
 }
 
 /*
