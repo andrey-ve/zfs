@@ -201,6 +201,11 @@ unsigned long zfs_arc_min = 0;
 unsigned long zfs_arc_meta_limit = 0;
 
 /*
+ * Max percentage of arc target size - arc_c to be used by ghosts
+ */
+static int arc_c_ghosts_per = 12;
+
+/*
  * Note that buffers can be in one of 6 states:
  *	ARC_anon	- anonymous (discussed below)
  *	ARC_mru		- recently used, currently cached
@@ -344,6 +349,7 @@ typedef struct arc_stats {
 	kstat_named_t arcstat_meta_used;
 	kstat_named_t arcstat_meta_limit;
 	kstat_named_t arcstat_meta_max;
+	kstat_named_t arcstat_ghost_c;
 } arc_stats_t;
 
 static arc_stats_t arc_stats = {
@@ -498,6 +504,7 @@ static arc_state_t	*arc_l2c_only;
 #define	arc_meta_limit	ARCSTAT(arcstat_meta_limit) /* max size for metadata */
 #define	arc_meta_used	ARCSTAT(arcstat_meta_used) /* size of metadata */
 #define	arc_meta_max	ARCSTAT(arcstat_meta_max) /* max size of metadata */
+#define	arc_ghost_c	ARCSTAT(arcstat_ghost_c)	/* target size of ghost cache */
 
 #define	L2ARC_IS_VALID_COMPRESS(_c_) \
 	((_c_) == ZIO_COMPRESS_LZ4 || (_c_) == ZIO_COMPRESS_EMPTY)
@@ -1969,22 +1976,15 @@ arc_evict(arc_state_t *state, uint64_t spa, int64_t bytes, boolean_t recycle,
 	 * sure we also adjust the ghost state size if necessary.
 	 */
 	if (arc_no_grow &&
-	    arc_mru_ghost->arcs_size + arc_mfu_ghost->arcs_size > arc_c) {
-		int64_t mru_over = arc_anon->arcs_size + arc_mru->arcs_size +
-		    arc_mru_ghost->arcs_size - arc_c;
+		arc_mru_ghost->arcs_size + arc_mfu_ghost->arcs_size > arc_ghost_c) {
+		double arc_ghost = arc_mru_ghost->arcs_size + arc_mfu_ghost->arcs_size;
+		int64_t mru_todelete =  arc_mru_ghost->arcs_size -
+			(int64_t)((arc_mru_ghost->arcs_size / arc_ghost) * arc_ghost_c);
+		int64_t mfu_todelete =  arc_mfu_ghost->arcs_size -
+			(int64_t)((arc_mfu_ghost->arcs_size / arc_ghost) * arc_ghost_c);
 
-		if (mru_over > 0 && arc_mru_ghost->arcs_lsize[type] > 0) {
-			int64_t todelete =
-			    MIN(arc_mru_ghost->arcs_lsize[type], mru_over);
-			arc_evict_ghost(arc_mru_ghost, 0, todelete,
-			    ARC_BUFC_DATA);
-		} else if (arc_mfu_ghost->arcs_lsize[type] > 0) {
-			int64_t todelete = MIN(arc_mfu_ghost->arcs_lsize[type],
-			    arc_mru_ghost->arcs_size +
-			    arc_mfu_ghost->arcs_size - arc_c);
-			arc_evict_ghost(arc_mfu_ghost, 0, todelete,
-			    ARC_BUFC_DATA);
-		}
+		arc_evict_ghost(arc_mru_ghost, 0, mru_todelete, ARC_BUFC_DATA);
+		arc_evict_ghost(arc_mfu_ghost, 0, mfu_todelete, ARC_BUFC_DATA);
 	}
 
 	return (stolen);
@@ -2125,6 +2125,8 @@ arc_adjust(void)
 	/*
 	 * Adjust ghost lists
 	 */
+	/*TODO (Andrey): looks like the code below is "dead" because ghosts
+	 * should be cleaned in the previous call to arc_evict */
 
 	adjustment = arc_mru->arcs_size + arc_mru_ghost->arcs_size - arc_c;
 
@@ -2295,6 +2297,7 @@ arc_shrink(uint64_t bytes)
 			arc_p = (arc_c >> 1);
 		ASSERT(arc_c >= arc_c_min);
 		ASSERT((int64_t)arc_p >= 0);
+		arc_ghost_c = (arc_c_ghosts_per * arc_c) / 100;
 	}
 
 	if (arc_size > arc_c)
@@ -2605,6 +2608,9 @@ arc_adapt(int bytes, arc_state_t *state)
 			arc_c = arc_c_max;
 		else if (state == arc_anon)
 			atomic_add_64(&arc_p, (int64_t)bytes);
+
+		arc_ghost_c = (arc_c_ghosts_per * arc_c) / 100;
+
 		if (arc_p > arc_c)
 			arc_p = arc_c;
 	}
@@ -3861,8 +3867,10 @@ arc_tempreserve_space(uint64_t reserve, uint64_t txg)
 		return (ERESTART);
 	}
 #endif
-	if (reserve > arc_c/4 && !arc_no_grow)
+	if (reserve > arc_c/4 && !arc_no_grow) {
 		arc_c = MIN(arc_c_max, reserve * 4);
+		arc_ghost_c = (arc_c_ghosts_per * arc_c) / 100;
+	}
 	if (reserve > arc_c) {
 		DMU_TX_STAT_BUMP(dmu_tx_memory_reserve);
 		return (SET_ERROR(ENOMEM));
@@ -4016,6 +4024,7 @@ arc_init(void)
 	arc_mfu_ghost = &ARC_mfu_ghost;
 	arc_l2c_only = &ARC_l2c_only;
 	arc_size = 0;
+	arc_ghost_c = (arc_c_ghosts_per * arc_c) / 100;
 
 	mutex_init(&arc_anon->arcs_mtx, NULL, MUTEX_DEFAULT, NULL);
 	mutex_init(&arc_mru->arcs_mtx, NULL, MUTEX_DEFAULT, NULL);
@@ -5547,4 +5556,7 @@ MODULE_PARM_DESC(l2arc_ignore_mru, "Avoid caching MRU materials in L2ARC");
 
 module_param(l2arc_ignore_mfu, int, 0644);
 MODULE_PARM_DESC(l2arc_ignore_mfu, "Avoid caching MFU materials in L2ARC");
+
+module_param(arc_c_ghosts_per, int, 0644);
+MODULE_PARM_DESC(arc_c_ghosts_per, "Max percentage of arc target size to be used by ghosts");
 #endif
