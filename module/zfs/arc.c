@@ -350,6 +350,9 @@ typedef struct arc_stats {
 	kstat_named_t arcstat_meta_limit;
 	kstat_named_t arcstat_meta_max;
 	kstat_named_t arcstat_ghost_c;
+	kstat_named_t arcstat_ghosts_evicted;
+	kstat_named_t arcstat_ghosts_evicted_dead;
+	
 } arc_stats_t;
 
 static arc_stats_t arc_stats = {
@@ -1985,6 +1988,7 @@ arc_evict(arc_state_t *state, uint64_t spa, int64_t bytes, boolean_t recycle,
 
 		arc_evict_ghost(arc_mru_ghost, 0, mru_todelete, ARC_BUFC_DATA);
 		arc_evict_ghost(arc_mfu_ghost, 0, mfu_todelete, ARC_BUFC_DATA);
+		ARCSTAT_BUMP(arcstat_ghosts_evicted);
 	}
 
 	return (stolen);
@@ -2133,6 +2137,7 @@ arc_adjust(void)
 	if (adjustment > 0 && arc_mru_ghost->arcs_size > 0) {
 		delta = MIN(arc_mru_ghost->arcs_size, adjustment);
 		arc_evict_ghost(arc_mru_ghost, 0, delta, ARC_BUFC_DATA);
+		ARCSTAT_BUMP(arcstat_ghosts_evicted_dead);
 	}
 
 	adjustment =
@@ -2141,6 +2146,7 @@ arc_adjust(void)
 	if (adjustment > 0 && arc_mfu_ghost->arcs_size > 0) {
 		delta = MIN(arc_mfu_ghost->arcs_size, adjustment);
 		arc_evict_ghost(arc_mfu_ghost, 0, delta, ARC_BUFC_DATA);
+		ARCSTAT_BUMP(arcstat_ghosts_evicted_dead);
 	}
 }
 
@@ -4024,6 +4030,10 @@ arc_init(void)
 	arc_mfu_ghost = &ARC_mfu_ghost;
 	arc_l2c_only = &ARC_l2c_only;
 	arc_size = 0;
+
+	if (arc_c_ghosts_per < 1 || arc_c_ghosts_per > 100)
+		arc_c_ghosts_per = 12;
+
 	arc_ghost_c = (arc_c_ghosts_per * arc_c) / 100;
 
 	mutex_init(&arc_anon->arcs_mtx, NULL, MUTEX_DEFAULT, NULL);
