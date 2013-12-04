@@ -440,6 +440,9 @@ static arc_stats_t arc_stats = {
 	{ "arc_meta_used",		KSTAT_DATA_UINT64 },
 	{ "arc_meta_limit",		KSTAT_DATA_UINT64 },
 	{ "arc_meta_max",		KSTAT_DATA_UINT64 },
+	{ "ghost_c",			KSTAT_DATA_UINT64 },
+	{ "ghosts_evicted",		KSTAT_DATA_UINT64 },
+	{ "ghosts_evicted_dead",	KSTAT_DATA_UINT64 },
 };
 
 #define	ARCSTAT(stat)	(arc_stats.stat.value.ui64)
