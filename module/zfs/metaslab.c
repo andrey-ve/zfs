@@ -64,9 +64,14 @@ int zfs_condense_pct = 200;
 int zfs_mg_alloc_failures;
 
 /*
- * Metaslab debugging: when set, keeps all space maps in core to verify frees.
+ * When set will load all metaslabs when pool is first opened.
  */
-int metaslab_debug = 0;
+int metaslab_debug_load = 0;
+
+/*
+ * When set will prevent metaslabs from being unloaded.
+ */
+int metaslab_debug_unload = 0;
 
 /*
  * Minimum size which forces the dynamic allocator to change
@@ -753,7 +758,7 @@ metaslab_init(metaslab_group_t *mg, space_map_obj_t *smo,
 
 	metaslab_group_add(mg, msp);
 
-	if (metaslab_debug && smo->smo_object != 0) {
+	if (metaslab_debug_load && smo->smo_object != 0) {
 		mutex_enter(&msp->ms_lock);
 		VERIFY(space_map_load(msp->ms_map, mg->mg_class->mc_ops,
 		    SM_FREE, smo, spa_meta_objset(vd->vdev_spa)) == 0);
@@ -1296,7 +1301,7 @@ metaslab_sync_done(metaslab_t *msp, uint64_t txg)
 			if (msp->ms_allocmap[(txg + t) & TXG_MASK]->sm_space)
 				evictable = 0;
 
-		if (evictable && !metaslab_debug)
+		if (evictable && !metaslab_debug_unload)
 			space_map_unload(sm);
 	}
 
@@ -1929,6 +1934,8 @@ void metaslab_fastwrite_unmark(spa_t *spa, const blkptr_t *bp)
 }
 
 #if defined(_KERNEL) && defined(HAVE_SPL)
-module_param(metaslab_debug, int, 0644);
-MODULE_PARM_DESC(metaslab_debug, "keep space maps in core to verify frees");
+module_param(metaslab_debug_load, int, 0644);
+MODULE_PARM_DESC(metaslab_debug_load, "load all metaslabs when pool is first opened");
+module_param(metaslab_debug_unload, int, 0644);
+MODULE_PARM_DESC(metaslab_debug_unload, "prevent metaslabs from being unloaded");
 #endif /* _KERNEL && HAVE_SPL */
