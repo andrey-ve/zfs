@@ -1868,6 +1868,9 @@ do_import(nvlist_t *config, const char *newname, const char *mntopts,
 	char *name;
 	uint64_t state;
 	uint64_t version;
+	boolean_t timing = B_FALSE;
+	hrtime_t start = 0;
+	hrtime_t elapsed_ms = 0;
 
 	verify(nvlist_lookup_string(config, ZPOOL_CONFIG_POOL_NAME,
 	    &name) == 0);
@@ -1917,8 +1920,19 @@ do_import(nvlist_t *config, const char *newname, const char *mntopts,
 		}
 	}
 
+	if (getenv("IZBOX_TIMING") != NULL)
+		timing = B_TRUE;
+
+	if (timing)
+		start = gethrtime();
+
 	if (zpool_import_props(g_zfs, config, newname, props, flags) != 0)
 		return (1);
+
+	if (timing) {
+		elapsed_ms = (gethrtime() - start) / 1000000;
+		printf("zpool_import_props() took %llu millisec\n", elapsed_ms);
+	}
 
 	if (newname != NULL)
 		name = (char *)newname;

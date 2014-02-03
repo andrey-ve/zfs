@@ -103,6 +103,9 @@ get_devid(const char *path)
 	ddi_devid_t devid;
 	char *minor, *ret;
 
+	if (getenv("IZBOX_OPTIMIZATION_OFF") == NULL)
+		return (NULL);
+
 	if ((fd = open(path, O_RDONLY)) < 0)
 		return (NULL);
 
@@ -756,14 +759,16 @@ get_configs(libzfs_handle_t *hdl, pool_list_t *pl, boolean_t active_ok)
 			continue;
 		}
 
-		if ((nvl = refresh_config(hdl, config)) == NULL) {
-			nvlist_free(config);
-			config = NULL;
-			continue;
-		}
+		if (getenv("IZBOX_SKIP_REFRESH_CONFIG") == NULL) {
+			if ((nvl = refresh_config(hdl, config)) == NULL) {
+				nvlist_free(config);
+				config = NULL;
+				continue;
+			}
 
-		nvlist_free(config);
-		config = nvl;
+			nvlist_free(config);
+			config = nvl;
+		}
 
 		/*
 		 * Go through and update the paths for spares, now that we have
@@ -1036,6 +1041,10 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 	vdev_entry_t *ve, *venext;
 	config_entry_t *ce, *cenext;
 	name_entry_t *ne, *nenext;
+	boolean_t part1only = B_TRUE;
+	boolean_t timing = B_FALSE;
+	hrtime_t start = 0;
+	hrtime_t elapsed_ms = 0;
 
 	verify(iarg->poolname == NULL || iarg->guid == 0);
 
@@ -1099,6 +1108,14 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			goto error;
 		}
 
+		if (getenv("IZBOX_DEV_FILTER_OFF") != NULL)
+			part1only = B_FALSE;
+
+		if (getenv("IZBOX_TIMING") != NULL)
+			timing = B_TRUE;
+
+		if (timing)
+			start = gethrtime();
 		/*
 		 * This is not MT-safe, but we have no MT consumers of libzfs
 		 */
@@ -1107,6 +1124,20 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			if (name[0] == '.' &&
 			    (name[1] == 0 || (name[1] == '.' && name[2] == 0)))
 				continue;
+
+			/*
+			 * In IZBox environment we want to ignore everything
+			 * that doesn't have -part1 suffix
+			 */
+			if (part1only) {
+				const char *suffix = strrchr(name, '-');
+
+				if ((suffix == NULL) ||
+				    (strncmp(suffix, "-part1", 6) != 0)) {
+					continue;
+				}
+			}
+
 
 			/*
 			 * Skip checking devices with well known prefixes:
@@ -1187,6 +1218,12 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			}
 		}
 
+		if (timing) {
+			elapsed_ms = (gethrtime() - start) / 1000000;
+			printf("Scan took %llu millisec\n", elapsed_ms);
+		}
+
+
 		(void) closedir(dirp);
 		dirp = NULL;
 	}
@@ -1194,7 +1231,16 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 #ifdef HAVE_LIBBLKID
 skip_scanning:
 #endif
+
+	if (timing)
+		start = gethrtime();
+
 	ret = get_configs(hdl, &pools, iarg->can_be_active);
+
+	if (timing) {
+		elapsed_ms = (gethrtime() - start) / 1000000;
+		printf("get_configs() took %llu millisec\n", elapsed_ms);
+	}
 
 error:
 	for (pe = pools.pools; pe != NULL; pe = penext) {
