@@ -134,6 +134,10 @@
  * The 'vs' configuration follows the format described in 'spa_config.c'.
  */
 
+#ifdef _KERNEL
+#include <linux/spinlock.h>
+#endif
+
 #include <sys/zfs_context.h>
 #include <sys/spa.h>
 #include <sys/spa_impl.h>
@@ -146,6 +150,10 @@
 #include <sys/zio.h>
 #include <sys/dsl_scan.h>
 #include <sys/fs/zfs.h>
+
+/* TODO (Andrey): what is right include? */
+#include <sys/debug.h>
+
 
 /*
  * Basic routines to read and write from a vdev label.
@@ -415,6 +423,167 @@ vdev_top_config_generate(spa_t *spa, nvlist_t *config)
 	kmem_free(array, rvd->vdev_children * sizeof (uint64_t));
 }
 
+#ifdef _KERNEL
+
+struct vdev_label_cache {
+	spinlock_t lock;
+	nvlist_t *list;
+};
+
+static struct vdev_label_cache vlc[VDEV_LABELS];
+
+static void
+vdev_label_read_done(zio_t *zio, int l)
+{
+	vdev_t *vd = zio->io_vd;
+	vdev_phys_t *vp = zio->io_private;
+	nvlist_t *label;
+	/* TODO: fix it  */
+	struct vdev_label_cache *lc = &vlc[l];
+	int ret;
+
+	ASSERT3U(zio->io_size, ==, sizeof(*vp));
+
+	printk(KERN_INFO "zio ALLOC: vp[%p] vp_size[%lu]\n", vp, (sizeof(*vp)));
+
+	if (zio->io_error != 0)
+		goto cleanup;
+
+	if (nvlist_unpack(vp->vp_nvlist, sizeof (vp->vp_nvlist),
+		    &label, 0) != 0)
+	    goto cleanup;
+
+	spin_lock(&lc->lock);
+	ret = nvlist_add_nvlist(lc->list, vd->vdev_path, label);
+	printk(KERN_INFO "nvlist_add_nvlist on vp[%p] vp_size[%lu] returned %d\n", vp, (sizeof(*vp)), ret);
+	spin_unlock(&lc->lock);
+
+cleanup:
+	zio_buf_free(zio->io_data, zio->io_size);
+}
+
+unsigned int vdev_label_cache_enable = 0;
+module_param(vdev_label_cache_enable, uint, 0644);
+MODULE_PARM_DESC(vdev_label_cache_enable, "Do vdev label preload and use it");
+
+static void vdev_label_read_done_0(zio_t *zio) { vdev_label_read_done(zio, 0); }
+static void vdev_label_read_done_1(zio_t *zio) { vdev_label_read_done(zio, 1); }
+static void vdev_label_read_done_2(zio_t *zio) { vdev_label_read_done(zio, 2); }
+static void vdev_label_read_done_3(zio_t *zio) { vdev_label_read_done(zio, 3); }
+
+zio_done_func_t *labels_read_done[] = {
+	vdev_label_read_done_0,
+	vdev_label_read_done_1,
+	vdev_label_read_done_2,
+	vdev_label_read_done_3
+};
+
+/*
+ 	vdev_readable(vd) should return true if this function callled
+ */
+static zio_t*
+vdev_label_read_start(vdev_t *vd, int l)
+{
+	zio_t *lz;
+	spa_t *spa = vd->vdev_spa;
+	vdev_phys_t *vp;
+	int flags = ZIO_FLAG_CONFIG_WRITER | ZIO_FLAG_CANFAIL |
+	    ZIO_FLAG_SPECULATIVE;
+
+	ASSERT(spa_config_held(spa, SCL_STATE_ALL, RW_WRITER) == SCL_STATE_ALL);
+
+	/* TODO(Andrey): Does vp and/or zio validation needed? */
+	vp = zio_buf_alloc(sizeof (*vp));
+	lz = zio_root(spa, NULL, NULL, flags);
+	vdev_label_read(lz, vd, l, vp,
+		offsetof(vdev_label_t, vl_vdev_phys),
+		sizeof (vdev_phys_t), labels_read_done[l], vp, flags);
+
+	lz->io_private = vp;
+
+	printk(KERN_INFO "zio ALLOC: vp[%p] vp_size[%lu]\n", vp, (sizeof(*vp)));
+
+	return lz;
+}
+
+static void
+vdev_label_read_config_start(vdev_t *vd, avl_tree_t *io_label_read, int l)
+{
+	int c;
+	zio_t *zio;
+
+	for (c = 0; c < vd->vdev_children; c++)
+		vdev_label_read_config_start(vd->vdev_child[c],
+			io_label_read, l);
+		
+	if (!(vd->vdev_ops->vdev_op_leaf && vdev_readable(vd)))
+		return;
+
+	zio = vdev_label_read_start(vd, l);
+	avl_add(io_label_read, zio);
+}
+
+/* TODO (Andrey): this is just copy paste from vdev_queue - replace it */
+static int
+vdev_label_offset_compare(const void *x1, const void *x2)
+{
+	const zio_t *z1 = x1;
+	const zio_t *z2 = x2;
+
+	if (z1->io_offset < z2->io_offset)
+		return (-1);
+	if (z1->io_offset > z2->io_offset)
+		return (1);
+
+	if (z1 < z2)
+		return (-1);
+	if (z1 > z2)
+		return (1);
+
+	return (0);
+}
+
+void
+vdev_label_read_config_continue(avl_tree_t *io_label_read, int l)
+{
+	zio_t *zio;
+
+	for (zio = avl_first(io_label_read); zio != NULL;
+				zio = AVL_NEXT(io_label_read, zio))
+		zio_wait(zio);
+}
+#endif
+
+void
+vdev_label_read_config2cache(vdev_t *rvd)
+{
+#ifdef _KERNEL
+	avl_tree_t io_label_read[VDEV_LABELS];
+	int l;
+
+	if (!vdev_label_cache_enable)
+		return;
+	
+	if (vlc[0].list)
+		return;
+
+	for (l = 0;l < VDEV_LABELS; l++) {
+		avl_create(&io_label_read[l], vdev_label_offset_compare,
+			sizeof (zio_t), offsetof(struct zio, io_queue_node));
+		VERIFY(nvlist_alloc(&vlc[l].list, NV_UNIQUE_NAME,
+				KM_PUSHPAGE) == 0);
+		spin_lock_init(&vlc[l].lock);
+
+		vdev_label_read_config_start(rvd, &io_label_read[l], l);
+	}
+
+	for (l = 0;l < VDEV_LABELS; l++) {
+		vdev_label_read_config_continue(&io_label_read[l], l);
+		avl_destroy(&io_label_read[l]);
+	}
+#endif
+}
+
 /*
  * Returns the configuration from the label of the given vdev. For vdevs
  * which don't have a txg value stored on their label (i.e. spares/cache)
@@ -428,8 +597,7 @@ vdev_label_read_config(vdev_t *vd, uint64_t txg)
 {
 	spa_t *spa = vd->vdev_spa;
 	nvlist_t *config = NULL;
-	vdev_phys_t *vp;
-	zio_t *zio;
+	vdev_phys_t *vp = NULL;
 	uint64_t best_txg = 0;
 	int error = 0;
 	int flags = ZIO_FLAG_CONFIG_WRITER | ZIO_FLAG_CANFAIL |
@@ -441,11 +609,26 @@ vdev_label_read_config(vdev_t *vd, uint64_t txg)
 	if (!vdev_readable(vd))
 		return (NULL);
 
-	vp = zio_buf_alloc(sizeof (vdev_phys_t));
-
 retry:
 	for (l = 0; l < VDEV_LABELS; l++) {
+		zio_t *zio = NULL;
 		nvlist_t *label = NULL;
+		uint64_t label_txg = 0;
+		int label_in_cache = 0;
+
+#ifdef _KERNEL
+		/* TODO: verify vlc init complite */
+		if (vdev_label_cache_enable &&
+				!(flags & ZIO_FLAG_TRYHARD) && vlc[l].list &&
+				nvlist_lookup_nvlist(vlc[l].list,
+					vd->vdev_path, &label) == 0) {
+			label_in_cache = 1;	
+			goto check;
+		}
+#endif
+
+		if (!vp)
+			vp = zio_buf_alloc(sizeof (vdev_phys_t));
 
 		zio = zio_root(spa, NULL, NULL, flags);
 
@@ -453,34 +636,38 @@ retry:
 		    offsetof(vdev_label_t, vl_vdev_phys),
 		    sizeof (vdev_phys_t), NULL, NULL, flags);
 
-		if (zio_wait(zio) == 0 &&
-		    nvlist_unpack(vp->vp_nvlist, sizeof (vp->vp_nvlist),
-		    &label, 0) == 0) {
-			uint64_t label_txg = 0;
+		if (zio_wait(zio) != 0)
+			goto cleanup;
 
-			/*
-			 * Auxiliary vdevs won't have txg values in their
-			 * labels and newly added vdevs may not have been
-			 * completely initialized so just return the
-			 * configuration from the first valid label we
-			 * encounter.
-			 */
-			error = nvlist_lookup_uint64(label,
-			    ZPOOL_CONFIG_POOL_TXG, &label_txg);
-			if ((error || label_txg == 0) && !config) {
-				config = label;
-				break;
-			} else if (label_txg <= txg && label_txg > best_txg) {
-				best_txg = label_txg;
-				nvlist_free(config);
-				config = fnvlist_dup(label);
-			}
+		if (nvlist_unpack(vp->vp_nvlist, sizeof (vp->vp_nvlist),
+		    	&label, 0) != 0)
+			goto cleanup;
+#ifdef _KERNEL
+check:
+#endif
+		/*
+		 * Auxiliary vdevs won't have txg values in their
+		 * labels and newly added vdevs may not have been
+		 * completely initialized so just return the
+		 * configuration from the first valid label we
+		 * encounter.
+		 */
+		error = nvlist_lookup_uint64(label,
+		 	ZPOOL_CONFIG_POOL_TXG, &label_txg);
+		if ((error || label_txg == 0) && !config) {
+			config = (label_in_cache) ? fnvlist_dup(label) : label;
+			break;
+		} else if (label_txg <= txg && label_txg > best_txg) {
+		 	best_txg = label_txg;
+		 	nvlist_free(config);
+		 	config = (label_in_cache) ? fnvlist_dup(label) : label;
+		 	continue;
 		}
-
-		if (label != NULL) {
+cleanup:
+		if (!label_in_cache && label != NULL)
 			nvlist_free(label);
-			label = NULL;
-		}
+		
+		label = NULL;
 	}
 
 	if (config == NULL && !(flags & ZIO_FLAG_TRYHARD)) {
@@ -488,7 +675,8 @@ retry:
 		goto retry;
 	}
 
-	zio_buf_free(vp, sizeof (vdev_phys_t));
+	if (vp)
+		zio_buf_free(vp, sizeof (vdev_phys_t));
 
 	return (config);
 }
