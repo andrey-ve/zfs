@@ -444,8 +444,6 @@ vdev_label_read_done(zio_t *zio, int l)
 
 	ASSERT3U(zio->io_size, ==, sizeof(*vp));
 
-	printk(KERN_INFO "zio ALLOC: vp[%p] vp_size[%lu]\n", vp, (sizeof(*vp)));
-
 	if (zio->io_error != 0)
 		goto cleanup;
 
@@ -455,7 +453,6 @@ vdev_label_read_done(zio_t *zio, int l)
 
 	spin_lock(&lc->lock);
 	ret = nvlist_add_nvlist(lc->list, vd->vdev_path, label);
-	printk(KERN_INFO "nvlist_add_nvlist on vp[%p] vp_size[%lu] returned %d\n", vp, (sizeof(*vp)), ret);
 	spin_unlock(&lc->lock);
 
 cleanup:
@@ -500,8 +497,6 @@ vdev_label_read_start(vdev_t *vd, int l)
 		sizeof (vdev_phys_t), labels_read_done[l], vp, flags);
 
 	lz->io_private = vp;
-
-	printk(KERN_INFO "zio ALLOC: vp[%p] vp_size[%lu]\n", vp, (sizeof(*vp)));
 
 	return lz;
 }
