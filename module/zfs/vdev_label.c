@@ -556,8 +556,16 @@ vdev_label_read_config2cache(vdev_t *rvd)
 	avl_tree_t io_label_read[VDEV_LABELS];
 	int l;
 
-	if (!vdev_label_cache_enable)
+	if (!vdev_label_cache_enable) {
+		if (!vlc[0].list)
+			return;
+
+		for (l = 0; l < VDEV_LABELS; l++) {
+			nvlist_free(vlc[l].list);
+			vlc[l].list == NULL;
+		}
 		return;
+	}
 	
 	if (vlc[0].list)
 		return;
